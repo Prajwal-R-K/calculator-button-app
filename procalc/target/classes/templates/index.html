@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProCalc</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='12' y='70' font-size='70'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
+  <style>
+    :root{--radius:12px}
+    .calc-card{border-radius:var(--radius)}
+    .display{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    .key{min-height:56px;font-weight:600}
+    .key.operator{background:rgba(13,110,253,.15)}
+    .key.equal{background:rgb(13,110,253);}
+    .preview{opacity:.8}
+    .history{max-height:320px;overflow:auto}
+    .focus-ring:focus{outline:2px solid var(--bs-primary); outline-offset:2px}
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+    /* Subtle UI animations */
+    .key{transition: transform .05s ease, box-shadow .2s ease, background-color .2s ease}
+    .key:hover{box-shadow: 0 2px 8px rgba(0,0,0,.15)}
+    .key:active{transform: translateY(1px) scale(.99)}
+    .btn{transition: transform .15s ease, box-shadow .2s ease}
+    .btn:active{transform: translateY(1px)}
+    @keyframes fadeInUp{from{opacity:0;transform: translateY(6px)} to{opacity:1;transform:none}}
+    .history > div{animation: fadeInUp .25s ease both}
+    .toast{backdrop-filter: blur(2px)}
+    /* Theme transition */
+    html[data-bs-theme]{transition: background-color .3s ease, color .3s ease}
+    /* Glassmorphism */
+    .glass{background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(8px)}
+    [data-bs-theme="light"] .glass{background: rgba(255,255,255,.6); border-color: rgba(0,0,0,.06)}
+    /* Ripple */
+    .ripple{position:relative; overflow:hidden}
+    .ripple span{position:absolute; border-radius:50%; transform: scale(0); animation: ripple .5s linear; background: rgba(255,255,255,.5)}
+    @keyframes ripple{to{transform: scale(8); opacity:0}}
+    /* Keyboard highlight */
+    .key-press{outline:2px solid var(--bs-primary); outline-offset: -2px}
+    /* Page fade-in */
+    .page-enter{animation: pageFade .35s ease both}
+    @keyframes pageFade{from{opacity:0; transform: translateY(8px)} to{opacity:1; transform:none}}
+    /* Result flip */
+    @keyframes flipIn{0%{transform: rotateX(90deg); opacity:.5} 100%{transform:none; opacity:1}}
+    .flip{animation: flipIn .25s ease}
+    /* Key bounce */
+    @keyframes bounce{0%{transform:scale(1)}50%{transform:scale(.98)}100%{transform:none}}
+    .bounce{animation: bounce .12s ease}
+    /* Theme crossfade overlay */
+    .theme-overlay{position:fixed; inset:0; pointer-events:none; z-index:1060; animation: overlayFade .35s ease both}
+    @keyframes overlayFade{from{opacity:1} to{opacity:0}}
+    /* Navbar gradient sweep */
+    .navbar{position:relative}
+    .navbar.sweep::after{content:""; position:absolute; top:0; left:-30%; height:3px; width:30%; background: linear-gradient(90deg, var(--bs-primary), transparent); animation: navSweep .7s ease}
+    @keyframes navSweep{from{left:-30%} to{left:130%}}
+  </style>
+</head>
+<body class="bg-body-tertiary page-enter">
+  <nav class="navbar navbar-expand-lg border-bottom bg-body">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#">ProCalc</a>
+      <div class="ms-auto d-flex gap-2">
+        <button id="helpBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#helpModal" aria-label="Keyboard help">?</button>
+        <button id="settingsBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal" aria-label="Settings">Settings</button>
+        <button id="themeToggle" class="btn btn-outline-secondary btn-sm" aria-label="Toggle theme">Theme</button>
+        <a id="aboutBtn" class="btn btn-outline-primary btn-sm" href="/about" aria-label="About this app">About</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container my-4">
+    <div class="row g-4">
+      <section class="col-lg-8">
+        <div class="card calc-card glass shadow-sm">
+          <div class="card-body">
+            <div class="display small text-secondary" id="expr" aria-live="polite"></div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="display h2 mb-0" id="result" aria-live="polite">0</div>
+              <button id="copyResultBtn" class="btn btn-sm btn-outline-secondary" title="Copy result" aria-label="Copy result">Copy</button>
+            </div>
+            <div class="display preview" id="preview"></div>
+            <div class="mt-3 d-flex gap-2">
+              <div class="badge text-bg-secondary" id="memoryBadge" aria-label="Memory">M: 0</div>
+              <div id="errorBanner" class="text-danger small" role="alert" aria-live="polite"></div>
+            </div>
+            <hr/>
+            <div class="row g-2" role="group" aria-label="Calculator keypad">
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="AC">AC</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="CE">CE</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="%">%</button></div>
+              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="/">÷</button></div>
+
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="7">7</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="8">8</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="9">9</button></div>
+              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="*">×</button></div>
+
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="4">4</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="5">5</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="6">6</button></div>
+              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="-">−</button></div>
+
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="1">1</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="2">2</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="3">3</button></div>
+              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="+">+</button></div>
+
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="MC" title="Memory Clear" aria-label="Memory Clear">MC</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="MR" title="Memory Recall" aria-label="Memory Recall">MR</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="0">0</button></div>
+              <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key=".">.</button></div>
+
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="(">(</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key=")">)</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-action="toggle-sign" title="Toggle Sign" aria-label="Toggle Sign">±</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="M+">M+</button></div>
+
+              <!-- Scientific functions -->
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="sin">sin</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="cos">cos</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="pow">pow(,)</button></div>
+              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="^">^</button></div>
+
+              <div class="col-12"><button class="btn btn-primary w-100 key equal ripple" data-key="=">=</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="col-lg-4 d-none d-lg-block">
+        <div class="card glass shadow-sm">
+          <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <span>History</span>
+            <input id="historySearch" class="form-control form-control-sm w-auto flex-grow-1" placeholder="Search" aria-label="Search history"/>
+            <div class="btn-group btn-group-sm" role="group">
+              <button id="exportJson" class="btn btn-outline-secondary" title="Export JSON">JSON</button>
+              <button id="exportCsv" class="btn btn-outline-secondary" title="Export CSV">CSV</button>
+            </div>
+            <button id="clearHistory" class="btn btn-sm btn-outline-danger ms-auto">Clear</button>
+          </div>
+          <div class="card-body">
+            <div id="favorites" class="mb-3"></div>
+            <div class="history" id="history"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Mobile history button -->
+      <div class="d-lg-none">
+        <button class="btn btn-outline-secondary w-100" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer">History</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Offcanvas history (mobile) -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="historyDrawer" aria-labelledby="historyDrawerLabel">
+    <div class="offcanvas-header">
+      <h5 id="historyDrawerLabel">History</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex justify-content-end mb-2">
+        <button id="clearHistoryMobile" class="btn btn-sm btn-outline-danger">Clear</button>
+      </div>
+      <div class="history" id="historyMobile"></div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Theme</label>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary" data-theme="light">Light</button>
+              <button class="btn btn-outline-secondary" data-theme="dark">Dark</button>
+              <button class="btn btn-outline-secondary" data-theme="auto">Auto</button>
+            </div>
+            <div class="form-text">Auto follows system preference.</div>
+          </div>
+          <div class="mb-3">
+            <label for="previewDelay" class="form-label">Live Preview Delay (ms)</label>
+            <input type="range" class="form-range" id="previewDelay" min="50" max="500" step="10">
+            <div><span id="previewDelayValue">120</span> ms</div>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="soundToggle">
+            <label class="form-check-label" for="soundToggle">Sound feedback</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="helpModalLabel">Keyboard shortcuts</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <ul>
+            <li>Digits and . for numbers</li>
+            <li>+ - * / for operators</li>
+            <li>Enter or = to evaluate</li>
+            <li>Backspace = CE, Esc = AC</li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const exprEl = document.getElementById('expr');
+    const resultEl = document.getElementById('result');
+    const previewEl = document.getElementById('preview');
+    const errorEl = document.getElementById('errorBanner');
+    const historyEl = document.getElementById('history');
+    const historyMobileEl = document.getElementById('historyMobile');
+    const memoryBadge = document.getElementById('memoryBadge');
+    const delaySlider = document.getElementById('previewDelay');
+    const delayValue = document.getElementById('previewDelayValue');
+    const historySearch = document.getElementById('historySearch');
+    const favoritesEl = document.getElementById('favorites');
+    const soundToggle = document.getElementById('soundToggle');
+    const navbar = document.querySelector('.navbar');
+    const api = {
+      evaluate: (expression) => fetch('/api/v1/evaluate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({expression})}).then(r=>r.json()),
+      preview: (expression) => fetch('/api/v1/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({expression})}).then(r=>r.json()),
+      history: () => fetch('/api/v1/history').then(r=>r.json()),
+      clearHistory: () => fetch('/api/v1/history/clear', {method:'POST'}).then(r=>r.json()),
+      memoryGet: () => fetch('/api/v1/memory').then(r=>r.json()),
+      memoryOp: (op, value) => fetch('/api/v1/memory', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({op, value})}).then(r=>r.json()),
+    };
+
+    let expression = '';
+    let debounce;
+    let previewDelayMs = Number(localStorage.getItem('previewDelayMs')||120);
+    let themePref = localStorage.getItem('theme')||'auto';
+
+    function setError(msg){ errorEl.textContent = msg || ''; }
+    function refreshMemory(){ api.memoryGet().then(m => { memoryBadge.textContent = 'M: ' + (m.memory || '0'); }); }
+    function getPinned(){ try{ return JSON.parse(localStorage.getItem('pinned')||'[]'); }catch{return []} }
+    function setPinned(arr){ localStorage.setItem('pinned', JSON.stringify(arr||[])); }
+    function historyItemTemplate(h){
+      const exprSafe = (h.expression||'').replaceAll('"','&quot;');
+      const isPinned = getPinned().includes(h.expression);
+      return `<div class="d-flex justify-content-between align-items-center border-bottom py-2">
+        <div>
+          <div class="small text-secondary">${h.timestamp || ''}</div>
+          <div>${h.expression} = <strong>${h.result}</strong></div>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" data-reuse="${exprSafe}">Reuse</button>
+          <button class="btn ${isPinned?'btn-warning':'btn-outline-warning'}" data-pin="${exprSafe}" title="Pin">★</button>
+        </div>
+      </div>`;
+    }
+    function renderFavorites(){
+      const pins = getPinned();
+      if(!favoritesEl) return;
+      if(!pins.length){ favoritesEl.innerHTML=''; return; }
+      const html = `<div class="card"><div class="card-body p-2"><div class="small text-secondary mb-2">Favorites</div>${pins.map(p=>`<span class="badge text-bg-primary me-1 mb-1" data-reuse="${p.replaceAll('"','&quot;')}">${p}</span>`).join(' ')}</div></div>`;
+      favoritesEl.innerHTML = html;
+    }
+    function renderHistory(items){
+      const q = (historySearch && historySearch.value || '').toLowerCase();
+      const list = (items || []).filter(h => !q || (h.expression+''+h.result).toLowerCase().includes(q));
+      const html = list.map(historyItemTemplate).join('');
+      historyEl.innerHTML = html;
+      if(historyMobileEl) historyMobileEl.innerHTML = html;
+      renderFavorites();
+      // stagger animation delays
+      Array.from(historyEl.children).forEach((el, i)=> el.style.animationDelay = (i*40)+'ms');
+      if(historyMobileEl){ Array.from(historyMobileEl.children).forEach((el, i)=> el.style.animationDelay = (i*40)+'ms'); }
+    }
+
+    function updatePreview(){
+      clearTimeout(debounce);
+      if(!expression){ previewEl.textContent=''; return; }
+      debounce = setTimeout(()=>{
+        api.preview(expression).then(r => {
+          if(r.status === 'OK'){
+            previewEl.textContent = r.formatted || r.result;
+            setError('');
+          } else {
+            previewEl.textContent = '';
+            setError(r.message || 'Error');
+          }
+        }).catch(()=>{});
+      }, previewDelayMs);
+    }
+
+    function getLastNumberSpan(expr){
+      // Returns [startIndex, endIndexExclusive] of last number in expression
+      let i = expr.length - 1;
+      while(i>=0 && /[0-9.]/.test(expr[i])) i--;
+      return [i+1, expr.length];
+    }
+
+    function press(key){
+      clickSound();
+      setError('');
+      if(key === 'AC'){ expression=''; exprEl.textContent=''; resultEl.textContent='0'; previewEl.textContent=''; return; }
+      if(key === 'CE'){ expression = expression.slice(0,-1); exprEl.textContent = expression; updatePreview(); return; }
+      if(key === '='){
+        api.evaluate(expression).then(r => {
+          if(r.status === 'OK'){
+            const display = (r.formatted ?? r.result);
+            const fromVal = Number(resultEl.textContent);
+            const toVal = Number(display);
+            if(Number.isInteger(fromVal) && Number.isInteger(toVal) && isFinite(fromVal) && isFinite(toVal)){
+              countUp(resultEl, fromVal, toVal, 420);
+            } else {
+              resultEl.textContent = display;
+              flip(resultEl);
+            }
+            expression = '';
+            exprEl.textContent = '';
+            previewEl.textContent = '';
+            api.history().then(renderHistory);
+          } else { setError(r.message || 'Error'); }
+        });
+        return;
+      }
+      if(['MC','MR','M+','M-'].includes(key)){
+        const val = (key==='M+'||key==='M-') ? resultEl.textContent : '0';
+        api.memoryOp(key, val).then(() => { refreshMemory(); showToast('Memory', key + ' done'); });
+        return;
+      }
+      if(key === 'toggle-sign' || key === '±'){
+        // Toggle sign of the last number
+        const [s,e] = getLastNumberSpan(expression);
+        const num = expression.slice(s,e);
+        if(!num){ return; }
+        if(num.startsWith('-')) expression = expression.slice(0,s) + num.slice(1) + expression.slice(e);
+        else expression = expression.slice(0,s) + '-' + num + expression.slice(e);
+        exprEl.textContent = expression;
+        updatePreview();
+        return;
+      }
+      // operator normalization: replace trailing operator
+      if(['+','-','*','/'].includes(key) && ['+','-','*','/'].includes(expression.slice(-1))){
+        expression = expression.slice(0,-1) + key;
+      } else {
+        expression += key;
+      }
+      exprEl.textContent = expression;
+      updatePreview();
+    }
+
+    document.querySelectorAll('[data-key]').forEach(btn => btn.addEventListener('click', (e)=> { ripple(e); btn.classList.add('bounce'); btn.addEventListener('animationend', ()=> btn.classList.remove('bounce'), {once:true}); press(btn.dataset.key) }));
+    document.querySelectorAll('[data-action="toggle-sign"]').forEach(btn => btn.addEventListener('click', ()=> press('toggle-sign')));
+    document.querySelectorAll('[data-func]').forEach(btn => btn.addEventListener('click', (e)=>{
+      ripple(e);
+      btn.classList.add('bounce'); btn.addEventListener('animationend', ()=> btn.classList.remove('bounce'), {once:true});
+      clickSound();
+      const fn = btn.getAttribute('data-func');
+      if(fn === 'pow') expression += 'pow(';
+      else expression += fn + '(';
+      exprEl.textContent = expression;
+      updatePreview();
+    }));
+
+    historyEl.addEventListener('click', e => {
+      const btn = e.target.closest('[data-reuse]');
+      if(btn){ expression = btn.getAttribute('data-reuse'); exprEl.textContent = expression; updatePreview(); return; }
+      const pinBtn = e.target.closest('[data-pin]');
+      if(pinBtn){ const ex = pinBtn.getAttribute('data-pin').replaceAll('&quot;','"');
+        const pins = getPinned();
+        const i = pins.indexOf(ex);
+        if(i>=0) pins.splice(i,1); else pins.push(ex);
+        setPinned(pins); api.history().then(renderHistory);
+      }
+    });
+    if(historyMobileEl){
+      historyMobileEl.addEventListener('click', e => {
+        const btn = e.target.closest('[data-reuse]');
+        if(btn){ expression = btn.getAttribute('data-reuse'); exprEl.textContent = expression; updatePreview(); }
+      });
+    }
+
+    document.getElementById('clearHistory').addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(renderHistory)));
+    const clearHistoryMobileBtn = document.getElementById('clearHistoryMobile');
+    if(clearHistoryMobileBtn){ clearHistoryMobileBtn.addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(renderHistory))); }
+    if(historySearch){ historySearch.addEventListener('input', ()=> api.history().then(renderHistory)); }
+    const exportJson = document.getElementById('exportJson');
+    const exportCsv = document.getElementById('exportCsv');
+    function download(filename, text, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=filename; a.click(); }
+    if(exportJson){ exportJson.addEventListener('click', ()=> api.history().then(list=> download('history.json', JSON.stringify(list,null,2), 'application/json'))); }
+    if(exportCsv){ exportCsv.addEventListener('click', ()=> api.history().then(list=>{
+      const rows = ['timestamp,expression,result'];
+      (list||[]).forEach(h=> rows.push(`${(h.timestamp||'').toString().replaceAll(',',' ')},"${(h.expression||'').replaceAll('"','""')}",${h.result}`));
+      download('history.csv', rows.join('\n'), 'text/csv');
+    })); }
+
+    document.addEventListener('keydown', (e)=>{
+      const key = e.key;
+      if((/^[0-9]$/).test(key) || ['+','-','*','/','.','%','(',')'].includes(key)) return press(key);
+      if(key === 'Enter' || key === '=') return press('=');
+      if(key === 'Backspace') return press('CE');
+      if(key === 'Escape') return press('AC');
+      if(key === '?'){
+        const modal = new bootstrap.Modal(document.getElementById('helpModal'));
+        modal.show();
+      }
+      // highlight matching key
+      const btn = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+      if(btn){ btn.classList.add('key-press'); setTimeout(()=> btn.classList.remove('key-press'), 120); }
+    });
+
+    function applyTheme(pref){
+      const html = document.documentElement;
+      if(pref === 'auto'){
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        html.setAttribute('data-bs-theme', prefersDark ? 'dark':'light');
+      } else {
+        html.setAttribute('data-bs-theme', pref);
+      }
+    }
+    applyTheme(themePref);
+    document.getElementById('themeToggle').addEventListener('click', ()=>{
+      themePref = (document.documentElement.getAttribute('data-bs-theme') == 'dark') ? 'light' : 'dark';
+      localStorage.setItem('theme', themePref);
+      themeTransition();
+      applyTheme(themePref);
+    });
+    document.querySelectorAll('#settingsModal [data-theme]').forEach(btn => btn.addEventListener('click', ()=>{
+      themePref = btn.getAttribute('data-theme');
+      localStorage.setItem('theme', themePref);
+      themeTransition();
+      applyTheme(themePref);
+    }));
+    delaySlider.value = String(previewDelayMs);
+    delayValue.textContent = String(previewDelayMs);
+    delaySlider.addEventListener('input', ()=>{ previewDelayMs = Number(delaySlider.value); delayValue.textContent = delaySlider.value; localStorage.setItem('previewDelayMs', String(previewDelayMs)); });
+    // sound toggle
+    const soundPref = localStorage.getItem('sound') === '1';
+    if(soundToggle){ soundToggle.checked = soundPref; soundToggle.addEventListener('change', ()=> localStorage.setItem('sound', soundToggle.checked ? '1':'0')); }
+
+    // initial
+    api.history().then(renderHistory);
+    refreshMemory();
+
+    // copy result
+    document.getElementById('copyResultBtn').addEventListener('click', ()=>{
+      const txt = resultEl.textContent || '';
+      if(!txt) return;
+      navigator.clipboard && navigator.clipboard.writeText(txt).then(()=>{
+        showToast('Copied', 'Result copied to clipboard');
+      }).catch(()=>{
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); showToast('Copied', 'Result copied to clipboard'); } catch {}
+        document.body.removeChild(ta);
+      });
+    });
+
+    // ripple helper
+    function ripple(e){ const el = e.currentTarget; const r = el.getBoundingClientRect(); const s=document.createElement('span'); const d=Math.max(r.width,r.height); s.style.width=s.style.height=d+'px'; s.style.left=(e.clientX-r.left - d/2)+'px'; s.style.top=(e.clientY-r.top - d/2)+'px'; el.appendChild(s); setTimeout(()=> s.remove(), 500); }
+
+    // flip helper
+    function flip(el){
+      el.classList.remove('flip');
+      // force reflow to restart animation
+      void el.offsetWidth;
+      el.classList.add('flip');
+      el.addEventListener('animationend', ()=> el.classList.remove('flip'), { once: true });
+    }
+
+    // count-up helper for integer transitions
+    function countUp(el, from, to, duration){
+      const start = performance.now();
+      const diff = to - from;
+      function step(t){
+        const p = Math.min((t - start)/duration, 1);
+        el.textContent = String(Math.round(from + diff * p));
+        if(p < 1) requestAnimationFrame(step); else flip(el);
+      }
+      requestAnimationFrame(step);
+    }
+
+    // theme crossfade overlay + navbar sweep
+    function themeTransition(){
+      const overlay = document.createElement('div');
+      overlay.className = 'theme-overlay bg-body';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('animationend', ()=> overlay.remove(), { once:true });
+      if(navbar){ navbar.classList.add('sweep'); navbar.addEventListener('animationend', ()=> navbar.classList.remove('sweep'), { once:true }); }
+    }
+
+    // sound helper
+    function clickSound(){ if(localStorage.getItem('sound')!=='1') return; try{ const ctx = new (window.AudioContext||window.webkitAudioContext)(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type='square'; o.frequency.value=600; g.gain.setValueAtTime(.04, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.08); o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.08);}catch{} }
+
+    // Toasts
+    function showToast(title, message){
+      const containerId = 'toastContainer';
+      let container = document.getElementById(containerId);
+      if(!container){
+        container = document.createElement('div');
+        container.id = containerId;
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(container);
+      }
+      const el = document.createElement('div');
+      el.className = 'toast align-items-center text-bg-secondary border-0';
+      el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); el.setAttribute('aria-atomic','true');
+      el.innerHTML = `<div class="d-flex"><div class="toast-body"><strong>${title}:</strong> ${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>`;
+      container.appendChild(el);
+      const t = new bootstrap.Toast(el, { delay: 2000 });
+      t.show();
+    }
+  </script>
+</body>
+</html>

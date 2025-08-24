@@ -1,0 +1,12 @@
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\dto\EvaluateRequest.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\ProcalcApplication.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\controller\ViewController.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\dto\EvaluateResponse.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\engine\CalculatorEngine.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\controller\AboutController.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\exception\ApiExceptionHandler.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\service\MemoryService.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\controller\HealthController.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\service\EngineService.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\controller\CalculatorController.java
+D:\Projects\calculator-button-app\procalc\src\main\java\com\procalc\service\HistoryService.java
