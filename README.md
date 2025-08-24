@@ -192,9 +192,3 @@ MIT (or your chosen license).
 * Built by **Prajwal R K**
 * GitHub: [Prajwal-R-K](https://github.com/Prajwal-R-K/calculator-button-app.git)
 
-```
-
----
-
-Would you like me to also **add a portfolio-style “Project Highlights” section** at the top (2–3 sentences summary with screenshots) so it’s more **recruiter-friendly**?
-```
