@@ -10,18 +10,32 @@
     :root{--radius:12px}
     .calc-card{border-radius:var(--radius)}
     .display{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    #result{font-size: clamp(2.25rem, 5vw, 3.75rem); font-weight: 900; letter-spacing: .3px; text-shadow: 0 0 10px rgba(13,110,253,.25)}
+    .result-accent{position:relative; padding:12px 14px; border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0,0,0,.18), inset 0 -1px 0 rgba(255,255,255,.04)}
+    .result-accent::before{content:""; position:absolute; inset:0; border-radius: inherit; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 35%); pointer-events:none}
+    .result-accent::after{content:""; position:absolute; left:0; right:0; bottom:-4px; height:3px; border-radius:2px; background: linear-gradient(90deg, var(--bs-primary), transparent)}
+    .glow{box-shadow: 0 0 0 0 rgba(13,110,253,.6); animation: glowPulse .45s ease}
+    @keyframes glowPulse{to{box-shadow: 0 0 24px 4px rgba(13,110,253,.35)}}
     .key{min-height:56px;font-weight:600}
-    .key.operator{background:rgba(13,110,253,.15)}
-    .key.equal{background:rgb(13,110,253);}
+    .key.equal{min-height:64px}
+    .key.operator{background:rgba(13,110,253,.12)}
+    .key.operator:hover{background: linear-gradient(135deg, rgba(13,110,253,.22), rgba(13,110,253,.12))}
+    .key.equal{background: linear-gradient(135deg, #20c997, #0d6efd); color: #fff; border: none}
+    .key.equal:hover{filter: brightness(1.05)}
     .preview{opacity:.8}
     .history{max-height:320px;overflow:auto}
-    .focus-ring:focus{outline:2px solid var(--bs-primary); outline-offset:2px}
+    .history .active{background: rgba(13,110,253,.06); outline:2px solid var(--bs-primary); border-radius: 8px}
+    .focus-ring:focus,.btn:focus-visible,.key:focus-visible{outline:3px solid var(--bs-primary); outline-offset:2px; box-shadow: 0 0 0 .15rem rgba(13,110,253,.25)}
     @media (prefers-reduced-motion: reduce) {
       * { transition: none !important; animation: none !important; }
     }
     /* Subtle UI animations */
     .key{transition: transform .05s ease, box-shadow .2s ease, background-color .2s ease}
     .key:hover{box-shadow: 0 2px 8px rgba(0,0,0,.15)}
+    @media (max-width: 576px){
+      .key{min-height:68px}
+      #result{font-size: clamp(2rem, 8vw, 3.25rem)}
+    }
     .key:active{transform: translateY(1px) scale(.99)}
     .btn{transition: transform .15s ease, box-shadow .2s ease}
     .btn:active{transform: translateY(1px)}
@@ -33,6 +47,17 @@
     /* Glassmorphism */
     .glass{background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(8px)}
     [data-bs-theme="light"] .glass{background: rgba(255,255,255,.6); border-color: rgba(0,0,0,.06)}
+    /* Style modes */
+    body.mode-flat .glass{background: var(--bs-body-bg); border-color: var(--bs-border-color-translucent); backdrop-filter:none}
+    body.mode-soft{ --soft-bg: hsl(220 14% 16% / 1); --soft-bg-light: hsl(220 14% 20% / 1); --soft-shadow-dark: rgba(0,0,0,.35); --soft-shadow-light: rgba(255,255,255,.08); }
+    [data-bs-theme="light"] body.mode-soft{ --soft-bg: #ecf0f3; --soft-bg-light: #ffffff; --soft-shadow-dark: rgba(163,177,198,.6); --soft-shadow-light: rgba(255,255,255,1); }
+    body.mode-soft{ background: var(--soft-bg); }
+    body.mode-soft .bg-body, body.mode-soft .bg-body-tertiary{ background: var(--soft-bg) !important; }
+    body.mode-soft .card{ background: var(--soft-bg); border: none; box-shadow: 9px 9px 16px var(--soft-shadow-dark), -9px -9px 16px var(--soft-shadow-light); }
+    body.mode-soft .key, body.mode-soft .btn{ border: none; background: var(--soft-bg); box-shadow: 6px 6px 12px var(--soft-shadow-dark), -6px -6px 12px var(--soft-shadow-light); }
+    body.mode-soft .key:active, body.mode-soft .btn:active{ box-shadow: inset 6px 6px 12px var(--soft-shadow-dark), inset -6px -6px 12px var(--soft-shadow-light); }
+    body.mode-soft .operator{ background: var(--soft-bg-light) !important; }
+    body.mode-soft .equal{ background: linear-gradient(135deg, var(--bs-teal), var(--bs-primary)) !important; color: #fff; }
     /* Ripple */
     .ripple{position:relative; overflow:hidden}
     .ripple span{position:absolute; border-radius:50%; transform: scale(0); animation: ripple .5s linear; background: rgba(255,255,255,.5)}
@@ -76,19 +101,26 @@
         <div class="card calc-card glass shadow-sm">
           <div class="card-body">
             <div class="display small text-secondary" id="expr" aria-live="polite"></div>
-            <div class="d-flex align-items-center gap-2">
-              <div class="display h2 mb-0" id="result" aria-live="polite">0</div>
+            <div class="d-flex align-items-center gap-2 result-accent">
+              <div class="display mb-0" id="result" aria-live="polite">0</div>
               <button id="copyResultBtn" class="btn btn-sm btn-outline-secondary" title="Copy result" aria-label="Copy result">Copy</button>
+              <canvas id="miniPlot" width="140" height="72" class="d-none d-sm-block ms-auto border border-secondary-subtle rounded" title="Graph preview"></canvas>
             </div>
-            <div class="display preview" id="preview"></div>
+            <div class="display preview text-secondary" id="preview" aria-live="polite"></div>
             <div class="mt-3 d-flex gap-2">
               <div class="badge text-bg-secondary" id="memoryBadge" aria-label="Memory">M: 0</div>
               <div id="errorBanner" class="text-danger small" role="alert" aria-live="polite"></div>
             </div>
             <hr/>
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+              <div class="text-secondary small" id="kbdHints">Shortcuts: Enter =, Esc AC, Backspace CE</div>
+              <div class="btn-group btn-group-sm" role="group" aria-label="Mode">
+                <button id="sciToggle" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="sciPanel" title="Toggle scientific keys">Scientific</button>
+              </div>
+            </div>
             <div class="row g-2" role="group" aria-label="Calculator keypad">
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="AC">AC</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="CE">CE</button></div>
+              <div class="col-3"><button class="btn btn-danger w-100 key ripple" data-key="AC" title="All Clear (Esc)">AC</button></div>
+              <div class="col-3"><button class="btn btn-warning w-100 key ripple" data-key="CE" title="Clear Entry (Backspace)">CE</button></div>
               <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="%">%</button></div>
               <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="/">÷</button></div>
 
@@ -107,23 +139,43 @@
               <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="3">3</button></div>
               <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="+">+</button></div>
 
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="MC" title="Memory Clear" aria-label="Memory Clear">MC</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="MR" title="Memory Recall" aria-label="Memory Recall">MR</button></div>
+              <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-key="MC" title="Memory Clear (MC)" aria-label="Memory Clear">MC</button></div>
+              <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-key="MR" title="Memory Recall (MR)" aria-label="Memory Recall">MR</button></div>
               <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key="0">0</button></div>
               <div class="col-3"><button class="btn btn-dark w-100 key ripple" data-key=".">.</button></div>
 
               <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="(">(</button></div>
               <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key=")">)</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-action="toggle-sign" title="Toggle Sign" aria-label="Toggle Sign">±</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="M+">M+</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-action="toggle-sign" title="Toggle Sign (negate last number)" aria-label="Toggle Sign">±</button></div>
+              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="M+" title="Memory Add (M+): add current result to memory">M+</button></div>
 
-              <!-- Scientific functions -->
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="sin">sin</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="cos">cos</button></div>
-              <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="pow">pow(,)</button></div>
-              <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="^">^</button></div>
+              <!-- Scientific functions (collapsible) -->
+              <div id="sciPanel" class="collapse w-100">
+                <div class="row g-2 mt-1">
+                  <!-- Row 1: trig + power -->
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="sin" title="Sine: sin(x)" aria-label="Sine">sin</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="cos" title="Cosine: cos(x)" aria-label="Cosine">cos</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="tan" title="Tangent: tan(x)" aria-label="Tangent">tan</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="pow" title="Power: pow(x,y)" aria-label="Power">pow(,)</button></div>
 
-              <div class="col-12"><button class="btn btn-primary w-100 key equal ripple" data-key="=">=</button></div>
+                  <!-- Row 2: roots/logs -->
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="sqrt" title="Square root: sqrt(x)" aria-label="Square root">√</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="log" title="Log base 10: log(x)" aria-label="Log base 10">log</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="ln" title="Natural log: ln(x)" aria-label="Natural log">ln</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-func="abs" title="Absolute value: abs(x)" aria-label="Absolute">abs</button></div>
+
+                  <!-- Row 3: constants, separators, postfix -->
+                  <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-const="pi" title="π (pi)">π</button></div>
+                  <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-const="e" title="e (Euler's number)">e</button></div>
+                  <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="," title="Argument separator (,) for functions" aria-label="Argument separator">,</button></div>
+                  <div class="col-3"><button class="btn btn-primary w-100 key ripple" data-key="!" title="Factorial: n!" aria-label="Factorial">n!</button></div>
+
+                  <!-- Row 4: operator '^' -->
+                  <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="^" title="Power operator (^)" aria-label="Power operator">^</button></div>
+                </div>
+              </div>
+
+              <div class="col-12"><button class="btn btn-primary w-100 key equal ripple" data-key="=" title="Evaluate (Press Enter)" aria-label="Evaluate">=</button></div>
             </div>
           </div>
         </div>
@@ -134,11 +186,13 @@
           <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
             <span>History</span>
             <input id="historySearch" class="form-control form-control-sm w-auto flex-grow-1" placeholder="Search" aria-label="Search history"/>
+            <input id="historyMin" type="number" class="form-control form-control-sm" style="max-width:120px" placeholder=">= result" title="Filter: result >= value"/>
+            <input id="historyMax" type="number" class="form-control form-control-sm" style="max-width:120px" placeholder="<= result" title="Filter: result <= value"/>
             <div class="btn-group btn-group-sm" role="group">
               <button id="exportJson" class="btn btn-outline-secondary" title="Export JSON">JSON</button>
               <button id="exportCsv" class="btn btn-outline-secondary" title="Export CSV">CSV</button>
             </div>
-            <button id="clearHistory" class="btn btn-sm btn-outline-danger ms-auto">Clear</button>
+            <button id="clearHistory" class="btn btn-sm btn-outline-danger ms-auto" title="Clear history">Clear</button>
           </div>
           <div class="card-body">
             <div id="favorites" class="mb-3"></div>
@@ -177,6 +231,15 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Style Mode</label>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary" data-style="flat">Flat</button>
+              <button class="btn btn-outline-secondary" data-style="glass">Glass</button>
+              <button class="btn btn-outline-secondary" data-style="soft">Soft Shadows</button>
+            </div>
+            <div class="form-text">Glass uses blur; Soft Shadows uses neumorphic effects.</div>
+          </div>
           <div class="mb-3">
             <label class="form-label">Theme</label>
             <div class="d-flex gap-2">
@@ -254,6 +317,7 @@
     let debounce;
     let previewDelayMs = Number(localStorage.getItem('previewDelayMs')||120);
     let themePref = localStorage.getItem('theme')||'auto';
+    let styleMode = localStorage.getItem('styleMode')||'flat';
 
     function setError(msg){ errorEl.textContent = msg || ''; }
     function refreshMemory(){ api.memoryGet().then(m => { memoryBadge.textContent = 'M: ' + (m.memory || '0'); }); }
@@ -269,6 +333,8 @@
         </div>
         <div class="btn-group btn-group-sm">
           <button class="btn btn-outline-secondary" data-reuse="${exprSafe}">Reuse</button>
+          <button class="btn btn-outline-secondary" data-copy="${exprSafe}" title="Copy expression and result">Copy</button>
+          <button class="btn btn-outline-secondary" data-dup="${exprSafe}" title="Duplicate entry (re-evaluate)">Duplicate</button>
           <button class="btn ${isPinned?'btn-warning':'btn-outline-warning'}" data-pin="${exprSafe}" title="Pin">★</button>
         </div>
       </div>`;
@@ -282,7 +348,17 @@
     }
     function renderHistory(items){
       const q = (historySearch && historySearch.value || '').toLowerCase();
-      const list = (items || []).filter(h => !q || (h.expression+''+h.result).toLowerCase().includes(q));
+      const minI = document.getElementById('historyMin');
+      const maxI = document.getElementById('historyMax');
+      const minV = minI && minI.value !== '' ? Number(minI.value) : null;
+      const maxV = maxI && maxI.value !== '' ? Number(maxI.value) : null;
+      const list = (items || []).filter(h => {
+        const matchesText = !q || (h.expression+''+h.result).toLowerCase().includes(q);
+        const num = Number(h.result);
+        const matchesMin = (minV===null || (isFinite(num) && num >= minV));
+        const matchesMax = (maxV===null || (isFinite(num) && num <= maxV));
+        return matchesText && matchesMin && matchesMax;
+      });
       const html = list.map(historyItemTemplate).join('');
       historyEl.innerHTML = html;
       if(historyMobileEl) historyMobileEl.innerHTML = html;
@@ -290,6 +366,7 @@
       // stagger animation delays
       Array.from(historyEl.children).forEach((el, i)=> el.style.animationDelay = (i*40)+'ms');
       if(historyMobileEl){ Array.from(historyMobileEl.children).forEach((el, i)=> el.style.animationDelay = (i*40)+'ms'); }
+      selectedHistoryIndex = -1;
     }
 
     function updatePreview(){
@@ -304,15 +381,77 @@
             previewEl.textContent = '';
             setError(r.message || 'Error');
           }
-        }).catch(()=>{});
+          updatePlot(expression);
+        }).catch(()=>{ updatePlot(expression); });
       }, previewDelayMs);
     }
 
     function getLastNumberSpan(expr){
-      // Returns [startIndex, endIndexExclusive] of last number in expression
+      // returns [startIndex, endIndexExclusive] of trailing number, or [expr.length, expr.length] if none
       let i = expr.length - 1;
+      while(i>=0 && /\s/.test(expr[i])) i--;
+      if(i<0) return [expr.length, expr.length];
+      if(!/[0-9.]/.test(expr[i])) return [expr.length, expr.length];
       while(i>=0 && /[0-9.]/.test(expr[i])) i--;
       return [i+1, expr.length];
+    }
+    
+    // insert unary function: wrap last number if present, else start fn(
+    function insertUnaryFunc(fn){
+      const [s,e] = getLastNumberSpan(expression);
+      const num = expression.slice(s,e);
+      if(num){
+        expression = expression.slice(0,s) + `${fn}(${num})` + expression.slice(e);
+      } else {
+        expression += `${fn}(`;
+      }
+    }
+
+    // pow helper: enforce two-argument shape pow(x,y)
+    function handlePow(){
+      // If expression ends within an open pow without comma, insert comma
+      // Otherwise, wrap the last number as first argument: num -> pow(num,
+      const openPowNoComma = /(?:^|[^a-zA-Z0-9_])pow\([^,\)]*$/;
+      if(openPowNoComma.test(expression)){
+        expression += ','; return;
+      }
+      const [s,e] = getLastNumberSpan(expression);
+      const num = expression.slice(s,e);
+      if(num){
+        expression = expression.slice(0,s) + `pow(${num},` + expression.slice(e);
+      } else {
+        expression += 'pow(';
+      }
+    }
+
+    // check if we are inside an open pow( ... ) without a comma yet
+    function canInsertCommaInPow(expr){
+      const p = expr.lastIndexOf('pow(');
+      if(p === -1) return false;
+      const tail = expr.slice(p);
+      // if we have a closing ')' after the last 'pow(', it's closed
+      if(tail.includes(')')) return false;
+      // already has a comma after 'pow(' ? then don't allow another
+      const after = tail.slice(4); // after 'pow('
+      return !after.includes(',');
+    }
+
+    // If inside pow( ... ) and there is a comma and some second-arg content without closing ')', close it.
+    function closePowIfNeeded(){
+      const p = expression.lastIndexOf('pow(');
+      if(p === -1) return false;
+      const tail = expression.slice(p);
+      if(tail.includes(')')) return false; // already closed
+      const after = tail.slice(4);
+      const commaIdx = after.indexOf(',');
+      if(commaIdx === -1) return false; // no comma yet
+      // ensure there is at least one non-space char after comma
+      const second = after.slice(commaIdx+1);
+      if(/\S/.test(second)){
+        expression += ')';
+        return true;
+      }
+      return false;
     }
 
     function press(key){
@@ -320,7 +459,28 @@
       setError('');
       if(key === 'AC'){ expression=''; exprEl.textContent=''; resultEl.textContent='0'; previewEl.textContent=''; return; }
       if(key === 'CE'){ expression = expression.slice(0,-1); exprEl.textContent = expression; updatePreview(); return; }
+      if(key === ','){
+        // only allow comma inside an open pow( ) call that doesn't already have a comma
+        if(canInsertCommaInPow(expression)){
+          // avoid duplicate comma
+          if(expression.endsWith(',')) { return; }
+          expression += ',';
+          exprEl.textContent = expression;
+          updatePreview();
+        } else {
+          showToast('Hint','Comma is used as pow(x,y) separator');
+        }
+        return;
+      }
+      // Before handling operators (including '^'), ')', or '=', auto-close pow(x,y if second arg present)
+      if(['+','-','*','/','^',')','='].includes(key)){
+        const closed = closePowIfNeeded();
+        if(closed){ exprEl.textContent = expression; }
+      }
       if(key === '='){
+        // block evaluate if pow is incomplete: pow(x or pow(x, at the end
+        const incompletePow = /(\bpow\([^,\)]+$)|(\bpow\([^\)]*,\s*$)/;
+        if(incompletePow.test(expression)) { setError('Complete pow(x,y) with two arguments'); return; }
         api.evaluate(expression).then(r => {
           if(r.status === 'OK'){
             const display = (r.formatted ?? r.result);
@@ -332,6 +492,7 @@
               resultEl.textContent = display;
               flip(resultEl);
             }
+            glow(resultEl);
             expression = '';
             exprEl.textContent = '';
             previewEl.textContent = '';
@@ -356,14 +517,17 @@
         updatePreview();
         return;
       }
-      // operator normalization: replace trailing operator
-      if(['+','-','*','/'].includes(key) && ['+','-','*','/'].includes(expression.slice(-1))){
+      // operator normalization: replace trailing operator (including '^')
+      if(['+','-','*','/','^'].includes(key) && ['+','-','*','/','^'].includes(expression.slice(-1))){
         expression = expression.slice(0,-1) + key;
       } else {
         expression += key;
       }
       exprEl.textContent = expression;
       updatePreview();
+      // quick plot update when user types without waiting for preview debounce
+      // keep lightweight; heavy work is debounced in updatePreview
+      schedulePlot(expression);
     }
 
     document.querySelectorAll('[data-key]').forEach(btn => btn.addEventListener('click', (e)=> { ripple(e); btn.classList.add('bounce'); btn.addEventListener('animationend', ()=> btn.classList.remove('bounce'), {once:true}); press(btn.dataset.key) }));
@@ -373,8 +537,21 @@
       btn.classList.add('bounce'); btn.addEventListener('animationend', ()=> btn.classList.remove('bounce'), {once:true});
       clickSound();
       const fn = btn.getAttribute('data-func');
-      if(fn === 'pow') expression += 'pow(';
-      else expression += fn + '(';
+      if(fn === 'pow') handlePow();
+      else { insertUnaryFunc(fn); }
+      exprEl.textContent = expression;
+      updatePreview();
+      schedulePlot(expression);
+    }));
+
+    // constants: pi and e, with implicit multiplication if needed
+    document.querySelectorAll('[data-const]').forEach(btn => btn.addEventListener('click', (e)=>{
+      ripple(e);
+      btn.classList.add('bounce'); btn.addEventListener('animationend', ()=> btn.classList.remove('bounce'), {once:true});
+      clickSound();
+      const c = btn.getAttribute('data-const'); // 'pi' or 'e'
+      const needsMul = /[0-9)!.a-zA-Z]$/.test(expression.trim());
+      expression += (needsMul ? '*' : '') + c;
       exprEl.textContent = expression;
       updatePreview();
     }));
@@ -382,6 +559,25 @@
     historyEl.addEventListener('click', e => {
       const btn = e.target.closest('[data-reuse]');
       if(btn){ expression = btn.getAttribute('data-reuse'); exprEl.textContent = expression; updatePreview(); return; }
+      const cbtn = e.target.closest('[data-copy]');
+      if(cbtn){
+        const ex = cbtn.getAttribute('data-copy');
+        const item = e.target.closest('.d-flex');
+        const resEl = item && item.querySelector('strong');
+        const val = resEl ? `${ex} = ${resEl.textContent}` : ex;
+        navigator.clipboard && navigator.clipboard.writeText(val).then(()=>{
+          showToast('Copied', 'History entry copied');
+        }).catch(()=>{
+          // fallback
+          const ta = document.createElement('textarea');
+          ta.value = val; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); showToast('Copied', 'History entry copied'); } catch {}
+          document.body.removeChild(ta);
+        });
+        return;
+      }
+      const dbtn = e.target.closest('[data-dup]');
+      if(dbtn){ const ex = dbtn.getAttribute('data-dup'); api.evaluate(ex).then(()=> api.history().then(renderHistory)); return; }
       const pinBtn = e.target.closest('[data-pin]');
       if(pinBtn){ const ex = pinBtn.getAttribute('data-pin').replaceAll('&quot;','"');
         const pins = getPinned();
@@ -397,10 +593,14 @@
       });
     }
 
-    document.getElementById('clearHistory').addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(renderHistory)));
+    document.getElementById('clearHistory').addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(list=>{ renderHistory(list); showToast('History','Cleared'); })));
     const clearHistoryMobileBtn = document.getElementById('clearHistoryMobile');
-    if(clearHistoryMobileBtn){ clearHistoryMobileBtn.addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(renderHistory))); }
+    if(clearHistoryMobileBtn){ clearHistoryMobileBtn.addEventListener('click', ()=> api.clearHistory().then(()=> api.history().then(list=>{ renderHistory(list); showToast('History','Cleared'); }))); }
     if(historySearch){ historySearch.addEventListener('input', ()=> api.history().then(renderHistory)); }
+    const historyMin = document.getElementById('historyMin');
+    const historyMax = document.getElementById('historyMax');
+    if(historyMin){ historyMin.addEventListener('input', ()=> api.history().then(renderHistory)); }
+    if(historyMax){ historyMax.addEventListener('input', ()=> api.history().then(renderHistory)); }
     const exportJson = document.getElementById('exportJson');
     const exportCsv = document.getElementById('exportCsv');
     function download(filename, text, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=filename; a.click(); }
@@ -411,12 +611,29 @@
       download('history.csv', rows.join('\n'), 'text/csv');
     })); }
 
+    let selectedHistoryIndex = -1;
+    function selectHistoryIndex(idx){
+      const items = Array.from(historyEl.children);
+      if(!items.length) return;
+      idx = Math.max(0, Math.min(items.length-1, idx));
+      if(selectedHistoryIndex>=0 && items[selectedHistoryIndex]) items[selectedHistoryIndex].classList.remove('active');
+      selectedHistoryIndex = idx;
+      const el = items[selectedHistoryIndex];
+      el.classList.add('active');
+      el.scrollIntoView({block:'nearest'});
+      // set expression to selected
+      const reuseBtn = el.querySelector('[data-reuse]');
+      if(reuseBtn){ expression = reuseBtn.getAttribute('data-reuse'); exprEl.textContent = expression; updatePreview(); }
+    }
+
     document.addEventListener('keydown', (e)=>{
       const key = e.key;
-      if((/^[0-9]$/).test(key) || ['+','-','*','/','.','%','(',')'].includes(key)) return press(key);
+      if((/^[0-9]$/).test(key) || ['+','-','*','/','.','%','(',')',',','^','!'].includes(key)) return press(key);
       if(key === 'Enter' || key === '=') return press('=');
       if(key === 'Backspace') return press('CE');
       if(key === 'Escape') return press('AC');
+      if(key === 'ArrowUp'){ e.preventDefault(); selectHistoryIndex(selectedHistoryIndex<=0?0:selectedHistoryIndex-1); return; }
+      if(key === 'ArrowDown'){ e.preventDefault(); const len = historyEl.children.length; if(len) selectHistoryIndex(selectedHistoryIndex<0?0:Math.min(len-1, selectedHistoryIndex+1)); return; }
       if(key === '?'){
         const modal = new bootstrap.Modal(document.getElementById('helpModal'));
         modal.show();
@@ -448,6 +665,18 @@
       themeTransition();
       applyTheme(themePref);
     }));
+    function applyStyleMode(mode){
+      document.body.classList.remove('mode-flat','mode-glass','mode-soft');
+      const cls = 'mode-' + (mode||'flat');
+      document.body.classList.add(cls);
+      localStorage.setItem('styleMode', mode||'flat');
+    }
+    applyStyleMode(styleMode);
+    document.querySelectorAll('#settingsModal [data-style]').forEach(btn => btn.addEventListener('click', ()=>{
+      styleMode = btn.getAttribute('data-style');
+      applyStyleMode(styleMode);
+      showToast && showToast('Style', 'Mode: ' + styleMode);
+    }));
     delaySlider.value = String(previewDelayMs);
     delayValue.textContent = String(previewDelayMs);
     delaySlider.addEventListener('input', ()=>{ previewDelayMs = Number(delaySlider.value); delayValue.textContent = delaySlider.value; localStorage.setItem('previewDelayMs', String(previewDelayMs)); });
@@ -458,6 +687,24 @@
     // initial
     api.history().then(renderHistory);
     refreshMemory();
+
+    // scientific panel toggle
+    (function(){
+      const sciToggle = document.getElementById('sciToggle');
+      const sciPanel = document.getElementById('sciPanel');
+      if(!sciToggle || !sciPanel) return;
+      const collapse = new bootstrap.Collapse(sciPanel, {toggle:false});
+      const stored = localStorage.getItem('sciOpen');
+      const prefOpen = stored === null ? false : stored === '1';
+      if(prefOpen){ collapse.show(); sciToggle.setAttribute('aria-expanded','true'); }
+      else { collapse.hide(); sciToggle.setAttribute('aria-expanded','false'); }
+      sciToggle.addEventListener('click', ()=>{
+        if(sciPanel.classList.contains('show')) collapse.hide();
+        else collapse.show();
+      });
+      sciPanel.addEventListener('shown.bs.collapse', ()=>{ sciToggle.setAttribute('aria-expanded','true'); localStorage.setItem('sciOpen','1'); });
+      sciPanel.addEventListener('hidden.bs.collapse', ()=>{ sciToggle.setAttribute('aria-expanded','false'); localStorage.setItem('sciOpen','0'); });
+    })();
 
     // copy result
     document.getElementById('copyResultBtn').addEventListener('click', ()=>{
@@ -485,6 +732,9 @@
       el.classList.add('flip');
       el.addEventListener('animationend', ()=> el.classList.remove('flip'), { once: true });
     }
+
+    // glow helper
+    function glow(el){ el.classList.remove('glow'); void el.offsetWidth; el.classList.add('glow'); el.addEventListener('animationend', ()=> el.classList.remove('glow'), {once:true}); }
 
     // count-up helper for integer transitions
     function countUp(el, from, to, duration){
@@ -527,6 +777,90 @@
       container.appendChild(el);
       const t = new bootstrap.Toast(el, { delay: 2000 });
       t.show();
+    }
+
+    // --- Mini-plot helpers ---
+    const miniPlot = document.getElementById('miniPlot');
+    let plotDeb;
+    function schedulePlot(expr){
+      clearTimeout(plotDeb);
+      plotDeb = setTimeout(()=> updatePlot(expr), 100);
+    }
+    function transformToJs(expr){
+      // quick sanity check: only allow known tokens and x
+      const safe = /^[0-9xX+\-*/^().,\s]|pi|e|sin|cos|tan|sqrt|log|ln|abs|pow$/i;
+      if(![...expr].every(ch => /[0-9a-zA-Z+\-*/^().,\s]/.test(ch))) return null;
+      let js = expr;
+      js = js.replace(/\s+/g,'');
+      // reject factorial for plotting
+      if(js.includes('!')) return null;
+      // functions/constants
+      js = js.replace(/pi\b/g, 'Math.PI');
+      js = js.replace(/\be\b/g, 'Math.E');
+      js = js.replace(/\bsin\(/g, 'Math.sin(');
+      js = js.replace(/\bcos\(/g, 'Math.cos(');
+      js = js.replace(/\btan\(/g, 'Math.tan(');
+      js = js.replace(/\bsqrt\(/g, 'Math.sqrt(');
+      js = js.replace(/\bln\(/g, 'Math.log(');
+      // log base10 via helper LOG10
+      js = js.replace(/\blog\(/g, 'LOG10(');
+      js = js.replace(/\babs\(/g, 'Math.abs(');
+      js = js.replace(/\bpow\(/g, 'Math.pow(');
+      // power operator ^ -> **
+      js = js.replace(/\^/g, '**');
+      // variable x case-insensitive
+      js = js.replace(/X/g,'x');
+      // final safety: no letters except x and Math and LOG10
+      if(/\b(?!x\b)(?!Math\b)(?!LOG10\b)[a-zA-Z_]\w*/.test(js)) return null;
+      return `const LOG10=(y)=>Math.log(y)/Math.LN10; return (${js});`;
+    }
+    function updatePlot(expr){
+      if(!miniPlot) return;
+      const ctx = miniPlot.getContext('2d');
+      // show only if expression has variable x
+      if(!/\bx\b/i.test(expr)) { miniPlot.classList.add('d-none'); ctx.clearRect(0,0,miniPlot.width, miniPlot.height); return; }
+      const body = transformToJs(expr);
+      if(!body){ miniPlot.classList.add('d-none'); ctx.clearRect(0,0,miniPlot.width, miniPlot.height); return; }
+      let fn;
+      try{ fn = new Function('x', body); }
+      catch{ miniPlot.classList.add('d-none'); return; }
+      const W = miniPlot.width, H = miniPlot.height;
+      ctx.clearRect(0,0,W,H);
+      // viewport
+      const xmin = -10, xmax = 10; const dx = (xmax - xmin) / (W-1);
+      let ymin = Infinity, ymax = -Infinity;
+      const ys = new Array(W);
+      for(let i=0;i<W;i++){
+        const x = xmin + i*dx;
+        let y = Number.NaN;
+        try{ y = fn(x); }catch{}
+        if(Number.isFinite(y)){
+          ys[i] = y; ymin = Math.min(ymin,y); ymax = Math.max(ymax,y);
+        } else { ys[i] = NaN; }
+      }
+      if(!isFinite(ymin) || !isFinite(ymax) || ymin===ymax){ ymin=-1; ymax=1; }
+      const pad = 6;
+      const toY = (y)=> H - pad - ( (y - ymin) / (ymax - ymin) ) * (H - 2*pad);
+      // grid axis y=0 if within range
+      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--bs-border-color') || 'rgba(255,255,255,.2)';
+      ctx.lineWidth = 1;
+      if(ymin < 0 && ymax > 0){
+        const y0 = toY(0);
+        ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
+      }
+      // plot line
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-primary') || '#0d6efd';
+      ctx.lineWidth = 1.5; ctx.beginPath();
+      let started=false;
+      for(let i=0;i<W;i++){
+        const y = ys[i];
+        if(!Number.isFinite(y)) { started=false; continue; }
+        const yy = toY(y);
+        if(!started){ ctx.moveTo(i, yy); started=true; }
+        else { ctx.lineTo(i, yy); }
+      }
+      ctx.stroke();
+      miniPlot.classList.remove('d-none');
     }
   </script>
 </body>

@@ -1,6 +1,7 @@
 package com.procalc.engine;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.ArrayDeque;
@@ -11,7 +12,8 @@ import java.util.List;
 /**
  * Simple calculator engine: tokenize -> shunting-yard -> RPN evaluate using
  * BigDecimal.
- * Supports + - * / and % (postfix percent).
+ * Supports + - * / ^, functions (sin, cos, tan, sqrt, log, ln, abs, pow),
+ * constants (pi, e), postfix percent % and factorial !.
  */
 public class CalculatorEngine {
     private final MathContext mathContext;
@@ -81,6 +83,8 @@ public class CalculatorEngine {
                     tokens.add("/");
                 else if (c == '%')
                     tokens.add("%");
+                else if (c == '!')
+                    tokens.add("!");
                 // ignore other characters
             }
         }
@@ -112,7 +116,19 @@ public class CalculatorEngine {
     private boolean isOperator(String t) { return "+-*/^".contains(t); }
 
     private boolean isFunction(String t) {
-        return "sin".equalsIgnoreCase(t) || "cos".equalsIgnoreCase(t) || "pow".equalsIgnoreCase(t);
+        return "sin".equalsIgnoreCase(t) || "cos".equalsIgnoreCase(t) || "tan".equalsIgnoreCase(t)
+                || "sqrt".equalsIgnoreCase(t) || "log".equalsIgnoreCase(t) || "ln".equalsIgnoreCase(t)
+                || "abs".equalsIgnoreCase(t) || "pow".equalsIgnoreCase(t);
+    }
+
+    private boolean isConstant(String t) {
+        return t != null && ("pi".equalsIgnoreCase(t) || "e".equalsIgnoreCase(t));
+    }
+
+    private BigDecimal constantValue(String t) {
+        if ("pi".equalsIgnoreCase(t)) return new BigDecimal(Math.PI, mathContext);
+        if ("e".equalsIgnoreCase(t)) return new BigDecimal(Math.E, mathContext);
+        return BigDecimal.ZERO;
     }
 
     private int precedence(String op) {
@@ -137,6 +153,8 @@ public class CalculatorEngine {
                 continue;
             if (isNumericToken(t)) {
                 out.add(t);
+            } else if (isConstant(t)) {
+                out.add(constantValue(t).toPlainString());
             } else if (isFunction(t)) {
                 stack.push(t.toLowerCase());
             } else if (isOperator(t)) {
@@ -163,6 +181,9 @@ public class CalculatorEngine {
             } else if ("%".equals(t)) {
                 // percent as postfix: push as token to output (to be handled in eval)
                 out.add("%");
+            } else if ("!".equals(t)) {
+                // factorial as postfix
+                out.add("!");
             } else {
                 throw new IllegalArgumentException("Unknown token: " + t);
             }
@@ -227,6 +248,38 @@ public class CalculatorEngine {
                             double rd = Math.cos(a.doubleValue());
                             st.push(new BigDecimal(rd, mathContext));
                         }
+                        case "tan" -> {
+                            if (st.isEmpty()) return new EvalResult(false, null, "tan requires 1 arg");
+                            BigDecimal a = st.pop();
+                            double rd = Math.tan(a.doubleValue());
+                            st.push(new BigDecimal(rd, mathContext));
+                        }
+                        case "sqrt" -> {
+                            if (st.isEmpty()) return new EvalResult(false, null, "sqrt requires 1 arg");
+                            BigDecimal a = st.pop();
+                            if (a.compareTo(BigDecimal.ZERO) < 0) return new EvalResult(false, null, "sqrt domain error");
+                            double rd = Math.sqrt(a.doubleValue());
+                            st.push(new BigDecimal(rd, mathContext));
+                        }
+                        case "log" -> {
+                            if (st.isEmpty()) return new EvalResult(false, null, "log requires 1 arg");
+                            BigDecimal a = st.pop();
+                            if (a.compareTo(BigDecimal.ZERO) <= 0) return new EvalResult(false, null, "log domain error");
+                            double rd = Math.log10(a.doubleValue());
+                            st.push(new BigDecimal(rd, mathContext));
+                        }
+                        case "ln" -> {
+                            if (st.isEmpty()) return new EvalResult(false, null, "ln requires 1 arg");
+                            BigDecimal a = st.pop();
+                            if (a.compareTo(BigDecimal.ZERO) <= 0) return new EvalResult(false, null, "ln domain error");
+                            double rd = Math.log(a.doubleValue());
+                            st.push(new BigDecimal(rd, mathContext));
+                        }
+                        case "abs" -> {
+                            if (st.isEmpty()) return new EvalResult(false, null, "abs requires 1 arg");
+                            BigDecimal a = st.pop();
+                            st.push(a.abs(mathContext));
+                        }
                         case "pow" -> {
                             if (st.size() < 2) return new EvalResult(false, null, "pow requires 2 args");
                             BigDecimal b = st.pop();
@@ -235,6 +288,19 @@ public class CalculatorEngine {
                             st.push(new BigDecimal(rd, mathContext));
                         }
                         default -> { return new EvalResult(false, null, "Unknown function: " + t); }
+                    }
+                } else if ("!".equals(t)) {
+                    if (st.isEmpty()) return new EvalResult(false, null, "factorial requires 1 arg");
+                    BigDecimal a = st.pop();
+                    try {
+                        int n = a.stripTrailingZeros().intValueExact();
+                        if (n < 0) return new EvalResult(false, null, "factorial domain error");
+                        if (n > 170) return new EvalResult(false, null, "factorial too large");
+                        BigInteger bi = BigInteger.ONE;
+                        for (int i = 2; i <= n; i++) bi = bi.multiply(BigInteger.valueOf(i));
+                        st.push(new BigDecimal(bi, mathContext));
+                    } catch (ArithmeticException ex) {
+                        return new EvalResult(false, null, "factorial requires integer");
                     }
                 } else {
                     return new EvalResult(false, null, "Unknown RPN token: " + t);
