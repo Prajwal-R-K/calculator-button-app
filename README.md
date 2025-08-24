@@ -190,7 +190,7 @@ MIT (or your chosen license).
 ## 👨‍💻 Author
 
 * Built by **Prajwal R K**
-* GitHub: [@your-username](https://github.com/Prajwal-R-K/calculator-button-app.git)
+* GitHub: [Prajwal-R-K](https://github.com/Prajwal-R-K/calculator-button-app.git)
 
 ```
 
