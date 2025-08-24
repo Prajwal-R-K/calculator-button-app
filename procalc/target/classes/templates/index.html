@@ -12,7 +12,8 @@
     .display{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
     #result{font-size: clamp(2.25rem, 5vw, 3.75rem); font-weight: 900; letter-spacing: .3px; text-shadow: 0 0 10px rgba(13,110,253,.25)}
     .result-accent{position:relative; padding:12px 14px; border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0,0,0,.18), inset 0 -1px 0 rgba(255,255,255,.04)}
-    .result-accent::before{content:""; position:absolute; inset:0; border-radius: inherit; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 35%); pointer-events:none}
+    .result-accent::before{content:""; position:absolute; inset:0; border-radius: inherit; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 35%); pointer-events:none; z-index:0}
+    .result-accent > *{ position: relative; z-index: 1 }
     .result-accent::after{content:""; position:absolute; left:0; right:0; bottom:-4px; height:3px; border-radius:2px; background: linear-gradient(90deg, var(--bs-primary), transparent)}
     .glow{box-shadow: 0 0 0 0 rgba(13,110,253,.6); animation: glowPulse .45s ease}
     @keyframes glowPulse{to{box-shadow: 0 0 24px 4px rgba(13,110,253,.35)}}
@@ -109,7 +110,7 @@
             <div class="d-flex align-items-center gap-2 result-accent">
               <div class="display mb-0" id="result" aria-live="polite">0</div>
               <button id="copyResultBtn" class="btn btn-sm btn-outline-secondary" title="Copy result" aria-label="Copy result">Copy</button>
-              <canvas id="miniPlot" width="140" height="72" class="d-none d-sm-block ms-auto border border-secondary-subtle rounded" title="Graph preview"></canvas>
+              <canvas id="miniPlot" width="140" height="72" class="ms-auto border border-secondary-subtle rounded flex-shrink-0" style="width:140px;height:72px" title="Graph preview"></canvas>
             </div>
             <div class="display preview text-secondary" id="preview" aria-live="polite"></div>
             <div class="mt-3 d-flex gap-2">
@@ -118,7 +119,7 @@
             </div>
             <hr/>
             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-              <div class="text-secondary small" id="kbdHints">Shortcuts: Enter =, Esc AC, Backspace CE</div>
+              <div class="text-secondary small" id="kbdHints">Shortcuts: Enter =, Esc AC, Backspace CE • Hint: use <strong>x</strong> to graph (e.g., <code>sin(x)</code>)</div>
               <div class="btn-group btn-group-sm" role="group" aria-label="Mode">
                 <button id="sciToggle" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="sciPanel" title="Toggle scientific keys">Scientific</button>
               </div>
@@ -174,6 +175,9 @@
                   <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-const="e" title="e (Euler's number)">e</button></div>
                   <div class="col-3"><button class="btn btn-secondary w-100 key ripple" data-key="," title="Argument separator (,) for functions" aria-label="Argument separator">,</button></div>
                   <div class="col-3"><button class="btn btn-primary w-100 key ripple" data-key="!" title="Factorial: n!" aria-label="Factorial">n!</button></div>
+
+                  <!-- Variable x key -->
+                  <div class="col-3"><button class="btn btn-outline-secondary w-100 key ripple" data-key="x" title="Variable x" aria-label="Variable x">x</button></div>
 
                   <!-- Row 4: operator '^' -->
                   <div class="col-3"><button class="btn btn-primary w-100 key operator ripple" data-key="^" title="Power operator (^)" aria-label="Power operator">^</button></div>
@@ -376,7 +380,15 @@
 
     function updatePreview(){
       clearTimeout(debounce);
-      if(!expression){ previewEl.textContent=''; return; }
+      if(!expression){ previewEl.textContent=''; updatePlot(''); return; }
+      // If expression contains a variable x, skip backend preview to avoid errors (backend doesn't accept variables)
+      if(/\bx\b/i.test(expression)){
+        previewEl.textContent = '';
+        setError('');
+        // draw immediately for better feedback
+        updatePlot(expression);
+        return;
+      }
       debounce = setTimeout(()=>{
         api.preview(expression).then(r => {
           if(r.status === 'OK'){
@@ -483,6 +495,12 @@
         if(closed){ exprEl.textContent = expression; }
       }
       if(key === '='){
+        // If expression contains variable x, avoid backend evaluate; graph only
+        if(/\bx\b/i.test(expression)){
+          showToast('Graph mode','Use = only for numeric expressions. Plot updates automatically for x-expressions.');
+          schedulePlot(expression);
+          return;
+        }
         // block evaluate if pow is incomplete: pow(x or pow(x, at the end
         const incompletePow = /(\bpow\([^,\)]+$)|(\bpow\([^\)]*,\s*$)/;
         if(incompletePow.test(expression)) { setError('Complete pow(x,y) with two arguments'); return; }
@@ -634,6 +652,7 @@
     document.addEventListener('keydown', (e)=>{
       const key = e.key;
       if((/^[0-9]$/).test(key) || ['+','-','*','/','.','%','(',')',',','^','!'].includes(key)) return press(key);
+      if(key === 'x' || key === 'X') return press('x');
       if(key === 'Enter' || key === '=') return press('=');
       if(key === 'Backspace') return press('CE');
       if(key === 'Escape') return press('AC');
@@ -792,14 +811,13 @@
       plotDeb = setTimeout(()=> updatePlot(expr), 100);
     }
     function transformToJs(expr){
-      // quick sanity check: only allow known tokens and x
-      const safe = /^[0-9xX+\-*/^().,\s]|pi|e|sin|cos|tan|sqrt|log|ln|abs|pow$/i;
+      // allow only calculator tokens and x
       if(![...expr].every(ch => /[0-9a-zA-Z+\-*/^().,\s]/.test(ch))) return null;
       let js = expr;
       js = js.replace(/\s+/g,'');
       // reject factorial for plotting
       if(js.includes('!')) return null;
-      // functions/constants
+      // functions/constants → JS
       js = js.replace(/pi\b/g, 'Math.PI');
       js = js.replace(/\be\b/g, 'Math.E');
       js = js.replace(/\bsin\(/g, 'Math.sin(');
@@ -807,16 +825,16 @@
       js = js.replace(/\btan\(/g, 'Math.tan(');
       js = js.replace(/\bsqrt\(/g, 'Math.sqrt(');
       js = js.replace(/\bln\(/g, 'Math.log(');
-      // log base10 via helper LOG10
-      js = js.replace(/\blog\(/g, 'LOG10(');
+      js = js.replace(/\blog\(/g, 'LOG10('); // base-10
       js = js.replace(/\babs\(/g, 'Math.abs(');
       js = js.replace(/\bpow\(/g, 'Math.pow(');
-      // power operator ^ -> **
+      // ^ to **
       js = js.replace(/\^/g, '**');
       // variable x case-insensitive
       js = js.replace(/X/g,'x');
-      // final safety: no letters except x and Math and LOG10
-      if(/\b(?!x\b)(?!Math\b)(?!LOG10\b)[a-zA-Z_]\w*/.test(js)) return null;
+      // final safety: ignore words that appear as Math.<word>
+      const scrubbed = js.replace(/Math\.[a-zA-Z_]\w*/g, 'Math');
+      if(/\b(?!x\b)(?!Math\b)(?!LOG10\b)[a-zA-Z_]\w*/.test(scrubbed)) return null;
       return `const LOG10=(y)=>Math.log(y)/Math.LN10; return (${js});`;
     }
     function updatePlot(expr){
@@ -824,13 +842,26 @@
       const ctx = miniPlot.getContext('2d');
       // show only if expression has variable x
       if(!/\bx\b/i.test(expr)) { miniPlot.classList.add('d-none'); ctx.clearRect(0,0,miniPlot.width, miniPlot.height); return; }
+      // ensure visible
+      miniPlot.classList.remove('d-none'); miniPlot.style.visibility = 'visible'; miniPlot.style.display = '';
+      // device pixel ratio scaling for crispness
+      const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      const cssW = 140, cssH = 72;
+      if(miniPlot.width !== cssW*dpr || miniPlot.height !== cssH*dpr){
+        miniPlot.width = cssW*dpr; miniPlot.height = cssH*dpr; miniPlot.style.width = cssW+'px'; miniPlot.style.height = cssH+'px';
+      }
       const body = transformToJs(expr);
-      if(!body){ miniPlot.classList.add('d-none'); ctx.clearRect(0,0,miniPlot.width, miniPlot.height); return; }
+      if(!body){ ctx.clearRect(0,0,miniPlot.width, miniPlot.height); return; }
       let fn;
       try{ fn = new Function('x', body); }
-      catch{ miniPlot.classList.add('d-none'); return; }
+      catch{ return; }
+      // reset any previous transforms
+      ctx.setTransform(1,0,0,1,0,0);
       const W = miniPlot.width, H = miniPlot.height;
       ctx.clearRect(0,0,W,H);
+      // subtle background for contrast
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bs-body-bg') || '#111';
+      ctx.fillRect(0,0,W,H);
       // viewport
       const xmin = -10, xmax = 10; const dx = (xmax - xmin) / (W-1);
       let ymin = Infinity, ymax = -Infinity;
@@ -846,15 +877,15 @@
       if(!isFinite(ymin) || !isFinite(ymax) || ymin===ymax){ ymin=-1; ymax=1; }
       const pad = 6;
       const toY = (y)=> H - pad - ( (y - ymin) / (ymax - ymin) ) * (H - 2*pad);
-      // grid axis y=0 if within range
-      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--bs-border-color') || 'rgba(255,255,255,.2)';
+      // axis y=0 if within range
+      ctx.strokeStyle = 'rgba(255,255,255,.25)';
       ctx.lineWidth = 1;
       if(ymin < 0 && ymax > 0){
         const y0 = toY(0);
         ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
       }
       // plot line
-      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-primary') || '#0d6efd';
+      ctx.strokeStyle = '#0d6efd';
       ctx.lineWidth = 1.5; ctx.beginPath();
       let started=false;
       for(let i=0;i<W;i++){
