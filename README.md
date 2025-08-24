@@ -1,5 +1,4 @@
 
-````markdown
 # 🔢 ProCalc
 
 Spring Boot + Thymeleaf **scientific calculator** with a polished **Bootstrap 5 UI**, history, memory, themes, and keyboard shortcuts.  
