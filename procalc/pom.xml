@@ -50,6 +50,12 @@
       <version>5.5.0</version>
       <scope>test</scope>
     </dependency>
+    <!-- Spring Boot testing support for @SpringBootTest, context loading, etc. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
 
     <!-- Optional (remove if you don't want Lombok) -->
     <!--
