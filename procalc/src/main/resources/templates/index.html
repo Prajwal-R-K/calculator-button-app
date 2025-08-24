@@ -82,15 +82,20 @@
     @keyframes navSweep{from{left:-30%} to{left:130%}}
   </style>
 </head>
-<body class="bg-body-tertiary page-enter">
-  <nav class="navbar navbar-expand-lg border-bottom bg-body">
+  <body class="bg-body-tertiary page-enter">
+  <nav class="navbar navbar-expand-lg navbar-dark border-bottom bg-body">
     <div class="container">
       <a class="navbar-brand fw-bold" href="#">ProCalc</a>
-      <div class="ms-auto d-flex gap-2">
-        <button id="helpBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#helpModal" aria-label="Keyboard help">?</button>
-        <button id="settingsBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal" aria-label="Settings">Settings</button>
-        <button id="themeToggle" class="btn btn-outline-secondary btn-sm" aria-label="Toggle theme">Theme</button>
-        <a id="aboutBtn" class="btn btn-outline-primary btn-sm" href="/about" aria-label="About this app">About</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav" aria-controls="topNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="topNav">
+        <div class="ms-auto d-flex flex-column flex-lg-row gap-2 mt-2 mt-lg-0">
+          <button id="helpBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#helpModal" aria-label="Keyboard help">?</button>
+          <button id="settingsBtn" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal" aria-label="Settings">Settings</button>
+          <button id="themeToggle" class="btn btn-outline-secondary btn-sm" aria-label="Toggle theme">Theme</button>
+          <a id="aboutBtn" class="btn btn-outline-primary btn-sm" href="/about" aria-label="About this app">About</a>
+        </div>
       </div>
     </div>
   </nav>
@@ -224,7 +229,7 @@
 
   <!-- Settings Modal -->
   <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
